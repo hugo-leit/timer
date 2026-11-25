@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Timer do Cronograma</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* VOICE: focused work tool, calm and exact
+   IDEA: an engineering datasheet / control panel for the day
+   PICTURE: the live block — huge countdown with a progress rail, then the day as a list with hanging times
+   COLOUR and TYPE: cobalt strip, white, black, pale blue zones; Space Grotesk + Inter
+   LAYOUT: title strip, big current-block panel, day list beside settings (stacks on narrow) */
+:root{color-scheme:light dark;--bg:light-dark(#ffffff,#0a0d18);--ink:light-dark(#0b0d14,#e8ecff);--mute:light-dark(#5a6278,#98a2c4);--zone:light-dark(#eef2ff,#141a33);--line:light-dark(#d5dcf5,#252d52);--co:#1240e0;--co2:light-dark(#1240e0,#7d9bff);--warn:light-dark(#c2410c,#ff9b6a);--ok:light-dark(#047857,#4ade9b)}
+:root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
+*{box-sizing:border-box;min-width:0}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 Inter,system-ui,sans-serif;overflow-x:clip}
+h1,h2,.num{font-family:"Space Grotesk",Inter,sans-serif}
+.strip{background:var(--co);color:#fff;padding:14px max(5vw,16px);display:flex;flex-wrap:wrap;gap:10px 20px;align-items:center;justify-content:space-between}
+.strip h1{margin:0;font-size:20px;font-weight:600;letter-spacing:-.01em}
+.strip .clock{font-family:"Space Grotesk";font-size:20px;font-variant-numeric:tabular-nums}
+.wrap{max-width:1240px;margin:0 auto;padding:clamp(18px,3vw,40px) max(5vw,16px)}
+.now{background:var(--zone);border:1px solid var(--line);border-radius:14px;padding:clamp(18px,3vw,34px);display:grid;gap:14px}
+.now .lbl{font-size:14px;color:var(--mute)}
+.now h2{margin:0;font-size:clamp(26px,4.4vw,44px);line-height:1.05;text-wrap:balance;font-weight:600}
+.count{font-family:"Space Grotesk";font-weight:700;font-size:clamp(56px,13vw,132px);line-height:.95;font-variant-numeric:tabular-nums;letter-spacing:-.03em;color:var(--co2)}
+.count.warn{color:var(--warn)}
+.rail{height:12px;background:var(--bg);border:1px solid var(--line);border-radius:99px;overflow:hidden}
+.rail i{display:block;height:100%;width:0;background:var(--co2);transition:width .6s}
+.now .meta{display:flex;flex-wrap:wrap;gap:6px 22px;font-size:15px;color:var(--mute)}
+.now .meta b{color:var(--ink);font-weight:600}
+.grid{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:clamp(16px,3vw,36px);margin-top:clamp(18px,3vw,32px)}
+@media(max-width:760px){.grid{grid-template-columns:minmax(0,1fr)}}
+.sec h3{font:600 17px "Space Grotesk",sans-serif;margin:0 0 10px}
+ol.day{list-style:none;margin:0;padding:0;border-top:1px solid var(--line)}
+ol.day li{display:grid;grid-template-columns:7.2em minmax(0,1fr) auto;gap:12px;align-items:baseline;padding:11px 4px;border-bottom:1px solid var(--line)}
+ol.day .t{font-family:"Space Grotesk";font-variant-numeric:tabular-nums;white-space:nowrap;font-weight:600}
+ol.day .d{font-size:13px;color:var(--mute);white-space:nowrap}
+ol.day li.past{color:var(--mute)}ol.day li.past .t{font-weight:500}
+ol.day li.cur{background:var(--zone);box-shadow:inset 4px 0 0 var(--co2);padding-left:12px}
+.empty{color:var(--mute);padding:14px 0}
+.panel{display:grid;gap:16px}
+.box{border:1px solid var(--line);border-radius:12px;padding:16px}
+.status{font-size:15px;margin:0 0 12px}
+.status.ok{color:var(--ok)}.status.bad{color:var(--warn)}
+.btns{display:flex;flex-wrap:wrap;gap:10px}
+button{font:600 15px Inter,sans-serif;min-height:44px;padding:0 16px;border-radius:10px;border:1px solid var(--co2);background:var(--co);color:#fff;cursor:pointer}
+button.sec2{background:transparent;color:var(--co2)}
+button:focus-visible,textarea:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid var(--co2);outline-offset:2px}
+textarea{width:100%;min-height:220px;font:15px/1.6 ui-monospace,Consolas,monospace;padding:12px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink);resize:vertical}
+label.row{display:flex;gap:10px;align-items:center;font-size:15px;min-height:36px}
+select,input[type=checkbox]{font-size:16px}
+select{min-height:40px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--ink);padding:0 8px}
+input[type=checkbox]{width:20px;height:20px;accent-color:var(--co)}
+.hint{font-size:13px;color:var(--mute);margin:6px 0 0}
+@media (prefers-reduced-motion:reduce){.rail i{transition:none}}
+</style>
+</head>
+<body>
+<header class="strip"><h1>Timer do Cronograma</h1><div class="clock num" id="clock">--:--:--</div></header>
+<main class="wrap">
+  <section class="now" aria-live="polite">
+    <div class="lbl" id="nowLbl">Agora</div>
+    <h2 id="nowTask">—</h2>
+    <div class="count" id="count">--:--</div>
+    <div class="rail"><i id="bar"></i></div>
+    <div class="meta" id="meta"></div>
+  </section>
+
+  <div class="grid">
+    <section class="sec">
+      <h3>Hoje</h3>
+      <ol class="day" id="day"></ol>
+    </section>
+
+    <section class="sec panel">
+      <div class="box">
+        <h3>Notificações do Windows</h3>
+        <p class="status" id="nstat">Verificando…</p>
+        <div class="btns">
+          <button id="enable">Ativar notificações</button>
+          <button class="sec2" id="test">Testar agora</button>
+        </div>
+        <label class="row" style="margin-top:12px"><input type="checkbox" id="sticky" checked> Aviso fica na tela até eu fechar</label>
+        <label class="row"><input type="checkbox" id="sound" checked> Tocar um bipe</label>
+        <label class="row">Avisar antes do fim:
+          <select id="warnMin"><option value="0">não avisar</option><option value="2">2 min</option><option value="5" selected>5 min</option><option value="10">10 min</option></select>
+        </label>
+        <p class="hint">Deixe esta aba aberta (pode minimizar). Se fechar, os avisos param.</p>
+      </div>
+      <div class="box">
+        <h3>Meu cronograma</h3>
+        <textarea id="txt" spellcheck="false" aria-label="Cronograma, um bloco por linha"></textarea>
+        <p class="hint">Um bloco por linha: <code>08:00-09:30 Tarefa</code>. Pode omitir o fim (<code>08:00 Tarefa</code>): ele termina quando começa o próximo. O cronograma inicial é só um exemplo.</p>
+        <div class="btns" style="margin-top:10px"><button id="save">Salvar cronograma</button></div>
+        <p class="hint" id="saved"></p>
+      </div>
+    </section>
+  </div>
+</main>
+
+<script>
+{
+const $=id=>document.getElementById(id);
+const SAMPLE=`08:00-08:30 E-mails e planejamento do dia
+08:30-10:00 Revisar DRE das revendas
+10:00-10:15 Pausa
+10:15-12:00 Pipeline ETL – ajustes
+12:00-13:00 Almoço
+13:00-14:30 Reunião / indicadores comerciais
+14:30-16:30 Projeto principal
+16:30-17:00 Fechamento e próximo dia`;
+const store={get(k,d){try{const v=localStorage.getItem(k);return v===null?d:v}catch(e){return d}},set(k,v){try{localStorage.setItem(k,v)}catch(e){}}};
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const pad=n=>String(n).padStart(2,'0');
+const hm=m=>pad(Math.floor(m/60))+':'+pad(m%60);
+const toMin=(h,m)=>(+h)*60+(+m);
+
+let blocks=[];
+function parse(text){
+  const out=[];
+  for(const raw of text.split(/\n/)){
+    const line=raw.trim(); if(!line) continue;
+    let m=line.match(/^(\d{1,2})[:h](\d{2})\s*(?:-|–|a|até)\s*(\d{1,2})[:h](\d{2})\s+(.+)$/i);
+    if(m){out.push({s:toMin(m[1],m[2]),e:toMin(m[3],m[4]),name:m[5].trim()});continue}
+    m=line.match(/^(\d{1,2})[:h](\d{2})\s+(.+)$/);
+    if(m) out.push({s:toMin(m[1],m[2]),e:null,name:m[3].trim()});
+  }
+  out.sort((a,b)=>a.s-b.s);
+  out.forEach((b,i)=>{if(b.e===null) b.e=out[i+1]?out[i+1].s:b.s+60});
+  return out.filter(b=>b.e>b.s);
+}
+
+// settings
+$('txt').value=store.get('crono.txt',SAMPLE);
+$('sticky').checked=store.get('crono.sticky','1')==='1';
+$('sound').checked=store.get('crono.sound','1')==='1';
+$('warnMin').value=store.get('crono.warn','5');
+blocks=parse($('txt').value);
+$('sticky').onchange=e=>store.set('crono.sticky',e.target.checked?'1':'0');
+$('sound').onchange=e=>store.set('crono.sound',e.target.checked?'1':'0');
+$('warnMin').onchange=e=>store.set('crono.warn',e.target.value);
+$('save').onclick=()=>{blocks=parse($('txt').value);store.set('crono.txt',$('txt').value);$('saved').textContent=blocks.length+' blocos salvos.';fired.clear();primeFired();tick()};
+
+// sound
+let actx=null;
+function unlockAudio(){try{actx=actx||new (window.AudioContext||window.webkitAudioContext)();if(actx.state==='suspended')actx.resume()}catch(e){}}
+function beep(){
+  if(!$('sound').checked||!actx) return;
+  try{const t=actx.currentTime;[0,0.25].forEach(d=>{const o=actx.createOscillator(),g=actx.createGain();o.frequency.value=880;g.gain.setValueAtTime(0.0001,t+d);g.gain.exponentialRampToValueAtTime(0.25,t+d+0.02);g.gain.exponentialRampToValueAtTime(0.0001,t+d+0.2);o.connect(g).connect(actx.destination);o.start(t+d);o.stop(t+d+0.22)})}catch(e){}
+}
+
+// notifications
+const hasN='Notification' in window;
+function nStatus(){
+  const s=$('nstat');
+  if(!hasN){s.className='status bad';s.textContent='Este navegador não oferece notificações aqui. Abra a página numa aba própria do Chrome ou Edge.';return}
+  const p=Notification.permission;
+  if(p==='granted'){s.className='status ok';s.textContent='Ativadas. Os avisos vão aparecer no canto do Windows.';$('enable').style.display='none'}
+  else if(p==='denied'){s.className='status bad';s.textContent='Bloqueadas. Clique no cadeado da barra de endereço → Notificações → Permitir, e recarregue.'}
+  else{s.className='status';s.textContent='Ainda não ativadas.'}
+}
+function notify(title,body,tag){
+  beep();
+  if(!hasN||Notification.permission!=='granted') return false;
+  try{const n=new Notification(title,{body,tag,requireInteraction:$('sticky').checked});n.onclick=()=>{window.focus();n.close()};return true}catch(e){return false}
+}
+$('enable').onclick=async()=>{
+  unlockAudio();
+  if(!hasN){nStatus();return}
+  try{await Notification.requestPermission()}catch(e){}
+  nStatus();
+};
+$('test').onclick=()=>{
+  unlockAudio();
+  const ok=notify('Teste do timer','Se você está vendo isto no canto do Windows, está funcionando.','teste');
+  if(!ok){$('nstat').className='status bad';$('nstat').textContent=hasN&&Notification.permission!=='granted'?'Ative as notificações primeiro.':'Não foi possível mostrar a notificação nesta janela. Abra a página numa aba própria.'}
+};
+document.addEventListener('click',unlockAudio,{once:true});
+
+// scheduling: fire each event once per day, within a 3-min window (background tabs may only tick once a minute)
+const fired=new Set();
+const dayKey=()=>{const d=new Date();return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate()};
+function events(){
+  const w=+$('warnMin').value, ev=[];
+  blocks.forEach((b,i)=>{
+    const next=blocks[i+1];
+    ev.push({at:b.s*60,key:'s'+i,title:'Agora: '+b.name,body:'Até '+hm(b.e)+' ('+(b.e-b.s)+' min)'});
+    if(w&&b.e-b.s>w) ev.push({at:(b.e-w)*60,key:'w'+i,title:'Faltam '+w+' min: '+b.name,body:next?'Próximo: '+next.name+' às '+hm(next.s):'É o último bloco do dia.'});
+    if(!next||next.s>b.e) ev.push({at:b.e*60,key:'e'+i,title:'Fim: '+b.name,body:next?'Intervalo até '+hm(next.s)+' — '+next.name:'Cronograma do dia concluído.'});
+  });
+  return ev;
+}
+function nowSec(){const d=new Date();return d.getHours()*3600+d.getMinutes()*60+d.getSeconds()}
+function primeFired(){const s=nowSec();for(const e of events()) if(s>=e.at) fired.add(dayKey()+e.key)} // don't re-fire past events on load
+primeFired();
+
+function fmt(sec){sec=Math.max(0,Math.round(sec));const h=Math.floor(sec/3600),m=Math.floor(sec%3600/60),s=sec%60;return (h?h+':'+pad(m):pad(m))+':'+pad(s)}
+
+function tick(){
+  const d=new Date(), s=nowSec(), nm=s/60;
+  $('clock').textContent=pad(d.getHours())+':'+pad(d.getMinutes())+':'+pad(d.getSeconds());
+  for(const e of events()){const k=dayKey()+e.key;if(!fired.has(k)&&s>=e.at&&s<e.at+180){fired.add(k);notify(e.title,e.body,e.key)}}
+
+  const ci=blocks.findIndex(b=>nm>=b.s&&nm<b.e), cur=blocks[ci];
+  const next=blocks.find(b=>b.s>nm);
+  const w=+$('warnMin').value;
+  if(cur){
+    const left=cur.e*60-s;
+    $('nowLbl').textContent='Agora · '+hm(cur.s)+'–'+hm(cur.e);
+    $('nowTask').textContent=cur.name;
+    $('count').textContent=fmt(left);
+    $('count').classList.toggle('warn',w>0&&left<=w*60);
+    $('bar').style.width=((s-cur.s*60)/((cur.e-cur.s)*60)*100).toFixed(1)+'%';
+    $('meta').innerHTML='<span>Termina às <b>'+hm(cur.e)+'</b></span>'+(next?'<span>Depois: <b>'+esc(next.name)+'</b> às '+hm(next.s)+'</span>':'<span>Último bloco do dia</span>');
+    document.title=fmt(left)+' · '+cur.name;
+  }else if(next){
+    $('nowLbl').textContent='Fora do cronograma';
+    $('nowTask').textContent='Próximo: '+next.name;
+    $('count').textContent=fmt(next.s*60-s);$('count').classList.remove('warn');
+    $('bar').style.width='0%';
+    $('meta').innerHTML='<span>Começa às <b>'+hm(next.s)+'</b></span>';
+    document.title='Em '+fmt(next.s*60-s)+' · '+next.name;
+  }else{
+    $('nowLbl').textContent=blocks.length?'Dia encerrado':'Sem cronograma';
+    $('nowTask').textContent=blocks.length?'Cronograma de hoje concluído':'Cole seu cronograma ao lado';
+    $('count').textContent='--:--';$('count').classList.remove('warn');
+    $('bar').style.width='100%';$('meta').innerHTML='';
+    document.title='Timer do Cronograma';
+  }
+
+  $('day').innerHTML=blocks.length?blocks.map((b,i)=>{
+    const cls=i===ci?'cur':(nm>=b.e?'past':'');
+    return '<li class="'+cls+'"><span class="t">'+hm(b.s)+'–'+hm(b.e)+'</span><span>'+esc(b.name)+'</span><span class="d">'+(b.e-b.s)+' min</span></li>'
+  }).join(''):'<li class="empty">Nenhum bloco ainda.</li>';
+}
+
+nStatus();
+tick();
+setInterval(tick,1000);
+document.addEventListener('visibilitychange',tick);
+}
+</script>
+</body>
+</html>
