@@ -87,6 +87,8 @@ input[type=checkbox]{width:20px;height:20px;accent-color:var(--co)}
         <label class="row">Avisar antes do fim:
           <select id="warnMin"><option value="0">não avisar</option><option value="2">2 min</option><option value="5" selected>5 min</option><option value="10">10 min</option></select>
         </label>
+        <label class="row"><input type="checkbox" id="keep" checked> Manter ativo em segundo plano</label>
+        <p class="hint" id="keepHint"></p>
         <p class="hint">Deixe esta aba aberta (pode minimizar). Se fechar, os avisos param.</p>
       </div>
       <div class="box">
@@ -238,8 +240,30 @@ function tick(){
 
 nStatus();
 tick();
-setInterval(tick,1000);
+// Clock runs in a Web Worker: Chrome throttles page timers in hidden tabs much harder than worker timers.
+let worker=null;
+try{
+  const src='setInterval(()=>postMessage(0),1000)';
+  worker=new Worker(URL.createObjectURL(new Blob([src],{type:'text/javascript'})));
+  worker.onmessage=tick;
+}catch(e){worker=null}
+if(!worker) setInterval(tick,1000);
 document.addEventListener('visibilitychange',tick);
+window.addEventListener('focus',tick);
+
+// "Keep awake": a near-silent tone makes Chrome treat the tab as playing audio, so it isn't frozen in the background.
+let keep=null;
+function startKeep(){
+  unlockAudio(); if(!actx||keep) return;
+  try{const o=actx.createOscillator(),g=actx.createGain();o.frequency.value=40;g.gain.value=0.002;o.connect(g).connect(actx.destination);o.start();keep={o,g}}catch(e){}
+}
+function stopKeep(){if(keep){try{keep.o.stop()}catch(e){}keep=null}}
+const ka=$('keep');
+ka.checked=store.get('crono.keep','1')==='1';
+ka.onchange=()=>{store.set('crono.keep',ka.checked?'1':'0');ka.checked?startKeep():stopKeep();keepStat()};
+function keepStat(){$('keepHint').textContent=ka.checked?(keep?'Ligado: a aba não deve ser congelada (aparece o ícone de som na aba).':'Clique em qualquer lugar da página para ligar.'):'Desligado: o Chrome pode congelar a aba minimizada.'}
+document.addEventListener('click',()=>{if(ka.checked){startKeep();keepStat()}});
+keepStat();
 }
 </script>
 </body>
